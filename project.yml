@@ -1,0 +1,46 @@
+name: KeyFlowMac
+options:
+  bundleIdPrefix: com.keyflow
+  deploymentTarget:
+    macOS: "14.0"
+packages:
+  KeyFlowCore:
+    path: .
+targets:
+  KeyFlowMac:
+    type: application
+    platform: macOS
+    sources:
+      - path: App
+    dependencies:
+      - package: KeyFlowCore
+        product: KeyFlowCore
+    info:
+      path: App/Resources/Info.plist
+      properties:
+        CFBundleShortVersionString: "1.0"
+        CFBundleVersion: "1"
+        CFBundleName: KeyFlow
+        CFBundleDisplayName: KeyFlow
+        LSMinimumSystemVersion: "14.0"
+        NSHighResolutionCapable: true
+        NSHumanReadableCopyright: KeyFlow
+        # Powers "Add as KeyFlow Shortcut" in the system Services menu on selected text — the
+        # macOS equivalent of the Android app's "Process text" share action.
+        NSServices:
+          - NSMenuItem:
+              default: Add as KeyFlow Shortcut
+            NSMessage: addAsShortcut
+            NSPortName: KeyFlow
+            NSSendTypes:
+              - NSStringPboardType
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.keyflow.mac
+        MARKETING_VERSION: "1.0"
+        CURRENT_PROJECT_VERSION: "1"
+        SWIFT_VERSION: "5.0"
+        MACOSX_DEPLOYMENT_TARGET: "14.0"
+        ENABLE_HARDENED_RUNTIME: NO
+        CODE_SIGN_STYLE: Automatic
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
