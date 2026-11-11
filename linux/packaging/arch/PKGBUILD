@@ -1,0 +1,36 @@
+# Builds KeyFlow from the checkout this file lives in (linux/packaging/arch/).
+#   cd linux/packaging/arch && makepkg -si
+pkgname=keyflow
+pkgver=1.0.0
+pkgrel=1
+pkgdesc="System-wide text expander (Linux port of KeyFlowMac): type ;addr, get your full address"
+arch=('any')
+url="https://github.com/shingelion/KeyFlowMac"
+license=('custom')  # the repository has no LICENSE file yet; update once it does
+depends=('python' 'python-evdev' 'libxkbcommon')
+makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
+optdepends=('wl-clipboard: paste characters that are not on your keyboard layout (Wayland)'
+            'xclip: paste characters that are not on your keyboard layout (X11)'
+            'xorg-setxkbmap: keyboard layout detection on bare X11 sessions')
+install=keyflow.install
+options=(!debug)
+
+build() {
+  cd "$startdir/../.."
+  python -m build --wheel --no-isolation --outdir "$srcdir/dist"
+}
+
+check() {
+  cd "$startdir/../.."
+  python -m unittest discover -s tests -t .
+}
+
+package() {
+  cd "$startdir/../.."
+  python -m installer --destdir="$pkgdir" "$srcdir"/dist/*.whl
+
+  install -Dm644 packaging/keyflow.service "$pkgdir/usr/lib/systemd/user/keyflow.service"
+  install -Dm644 packaging/70-keyflow-uinput.rules "$pkgdir/usr/lib/udev/rules.d/70-keyflow-uinput.rules"
+  install -Dm644 packaging/keyflow-modules-load.conf "$pkgdir/usr/lib/modules-load.d/keyflow.conf"
+  install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
+}

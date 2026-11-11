@@ -1,0 +1,14 @@
+[Unit]
+Description=KeyFlow text expander
+
+[Service]
+Type=simple
+ExecStart=/usr/bin/keyflow daemon
+Restart=on-failure
+RestartSec=2
+# Exit code 78 = missing permissions / bad configuration; retrying cannot fix that.
+RestartPreventExitStatus=78
+NoNewPrivileges=yes
+
+[Install]
+WantedBy=default.target

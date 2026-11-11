@@ -1,0 +1,3 @@
+# KeyFlow types expansions through /dev/uinput. Let members of the 'input' group (who can already
+# read /dev/input/event*, which KeyFlow needs to see keystrokes) open it too.
+KERNEL=="uinput", SUBSYSTEM=="misc", GROUP="input", MODE="0660", OPTIONS+="static_node=uinput"

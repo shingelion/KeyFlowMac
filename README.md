@@ -8,6 +8,8 @@ This port deliberately **excludes the aText-export importer** (JSON and CSV impo
 still here) — everything else carries over from the Android app: the matching engine, case
 handling, `{date}`/`{time}`/`{cursor}` placeholders, and the settings.
 
+> **Linux:** a port for Linux (X11 and Wayland, packaged for Arch) lives in [linux/](linux/README.md).
+
 ## How it works
 
 macOS has no direct equivalent of Android's `AccessibilityNodeInfo` (which lets you read a text

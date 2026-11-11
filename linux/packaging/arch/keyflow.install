@@ -1,0 +1,19 @@
+post_install() {
+  cat <<'MSG'
+==> KeyFlow needs two things before it can work:
+    1. Permission to read the keyboard and write /dev/uinput:
+         sudo usermod -aG input $USER        (then log out and back in)
+    2. The uinput module and its udev rule, active now instead of after a reboot:
+         sudo modprobe uinput
+         sudo udevadm control --reload && sudo udevadm trigger /dev/uinput
+==> Then start it and check everything:
+         systemctl --user enable --now keyflow
+         keyflow doctor
+==> Members of the 'input' group can read all keyboard input on this machine; see
+    /usr/share/doc/keyflow/README.md ("Security").
+MSG
+}
+
+post_upgrade() {
+  echo "==> Restart to pick up the new version:  systemctl --user restart keyflow"
+}

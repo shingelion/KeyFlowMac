@@ -3,3 +3,11 @@
 *.xcodeproj
 xcuserdata/
 .DS_Store
+__pycache__/
+*.pyc
+linux/build/
+linux/dist/
+linux/*.egg-info/
+linux/pkg/
+linux/src/
+*.pkg.tar.*
