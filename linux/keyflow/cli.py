@@ -232,6 +232,23 @@ def cmd_try(args: argparse.Namespace, store: Store) -> int:
 # -- doctor ---------------------------------------------------------------------------------
 
 
+def _install_hint() -> str:
+    """Package-manager command for python-evdev, based on /etc/os-release."""
+    ids: set[str] = set()
+    try:
+        for line in Path("/etc/os-release").read_text().splitlines():
+            key, _, value = line.partition("=")
+            if key in ("ID", "ID_LIKE"):
+                ids.update(value.strip().strip('"').split())
+    except OSError:
+        pass
+    if "arch" in ids:
+        return "sudo pacman -S python-evdev"
+    if "fedora" in ids or "rhel" in ids:
+        return "sudo dnf install python3-evdev"
+    return "pip install evdev"
+
+
 def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
     problems = 0
 
@@ -249,7 +266,7 @@ def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
         import evdev  # noqa: F401
         report(True, "python-evdev")
     except ImportError:
-        report(False, "python-evdev", "missing; install with: sudo pacman -S python-evdev")
+        report(False, "python-evdev", f"missing; install with: {_install_hint()}")
 
     from .layout import detect_layout
     from .xkb import XkbError, XkbKeymap

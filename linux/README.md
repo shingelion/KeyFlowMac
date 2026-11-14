@@ -16,7 +16,7 @@ the macOS-specific parts (CGEventTap, Accessibility, SwiftUI, SwiftData) replace
 | SwiftData + UserDefaults | `~/.config/keyflow/shortcuts.json` + `settings.json` |
 | SwiftUI app / menu bar | `keyflow` command + systemd user service |
 
-## Install on Arch Linux
+## Install on Arch Linux (Fedora: see below)
 
 ```bash
 git clone https://github.com/shingelion/KeyFlowMac.git
@@ -39,6 +39,24 @@ Dependencies (all in the official repos): `python`, `python-evdev`, `libxkbcommo
 `wl-clipboard` / `xclip` (see *Characters that are not on your layout*), `xorg-setxkbmap`.
 
 To run from a checkout without installing: `python -m keyflow <command>` inside `linux/`.
+
+## Install on Fedora
+
+```bash
+sudo dnf install rpm-build python3-devel pyproject-rpm-macros systemd-rpm-macros \
+    libxkbcommon xkeyboard-config python3-evdev
+git clone https://github.com/shingelion/KeyFlowMac.git
+cd KeyFlowMac
+mkdir -p ~/rpmbuild/SOURCES
+git archive --prefix=keyflow-1.0.0/ -o ~/rpmbuild/SOURCES/keyflow-1.0.0.tar.gz HEAD:linux
+rpmbuild -ba linux/packaging/fedora/keyflow.spec
+sudo dnf install ~/rpmbuild/RPMS/noarch/keyflow-1.0.0-1*.noarch.rpm
+```
+
+Then the same one-time setup as on Arch (`input` group, `modprobe uinput`, udev trigger,
+`systemctl --user enable --now keyflow`, `keyflow doctor`). `wl-clipboard` and `xclip` are
+installed as weak dependencies for the clipboard fallback. Fedora's default GNOME/Wayland session
+is supported; the layout is read from GNOME settings.
 
 ## Usage
 
