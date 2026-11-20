@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import errno
+import glob
 import logging
 import os
 from dataclasses import dataclass
@@ -29,15 +30,23 @@ def _wanted(dev: Any, filters: list[str]) -> bool:
     return any(f in dev.name or f in dev.path for f in filters)
 
 
-def scan_devices(known: set[str], filters: list[str]) -> Scan:
-    """Open every keyboard / pointer that is not already in ``known``."""
-    from evdev import InputDevice, ecodes, list_devices
+def scan_devices(known: set[str], filters: list[str], input_dir: str = "/dev/input") -> Scan:
+    """Open every keyboard / pointer that is not already in ``known``.
+
+    Event nodes are globbed here instead of using ``evdev.list_devices()``, which silently drops
+    nodes the user cannot read *and write*: that hid the real problem (not in the ``input``
+    group) behind a misleading "no keyboard found". Only read access is needed.
+    """
+    from evdev import InputDevice, ecodes
 
     keyboards: dict[str, Any] = {}
     pointers: dict[str, Any] = {}
     denied = 0
-    for path in list_devices():
+    for path in sorted(glob.glob(os.path.join(input_dir, "event*"))):
         if path in known:
+            continue
+        if not os.access(path, os.R_OK):
+            denied += 1
             continue
         try:
             dev = InputDevice(path)

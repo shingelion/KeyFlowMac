@@ -102,3 +102,29 @@ class DaemonTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class ScanTests(unittest.TestCase):
+    def test_unreadable_event_nodes_are_counted_as_denied(self):
+        from unittest import mock
+
+        from keyflow.devices import scan_devices
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "event0").touch()
+            (Path(d) / "event1").touch()
+            (Path(d) / "mouse0").touch()  # not an event node: ignored
+            with mock.patch("os.access", return_value=False):
+                scan = scan_devices(set(), [], input_dir=d)
+        self.assertEqual((scan.denied, scan.keyboards, scan.pointers), (2, {}, {}))
+
+    def test_permission_error_on_open_is_counted_as_denied(self):
+        from unittest import mock
+
+        from keyflow.devices import scan_devices
+
+        with tempfile.TemporaryDirectory() as d:
+            (Path(d) / "event0").touch()
+            with mock.patch("evdev.InputDevice", side_effect=PermissionError):
+                scan = scan_devices(set(), [], input_dir=d)
+        self.assertEqual(scan.denied, 1)
