@@ -1,3 +1,11 @@
+keyflow (1.1.0) unstable; urgency=medium
+
+  * Add the GTK 4 graphical interface (keyflow gui), desktop entry and icons.
+  * Add Syncthing folder sync (keyflow-sync.json), compatible with the macOS
+    and Android apps; folders (names, colours, order) sync too.
+
+ -- KeyFlow Maintainers <noreply@example.com>  Sat, 21 Nov 2026 12:00:00 +0000
+
 keyflow (1.0.0) unstable; urgency=medium
 
   * Initial Debian/Ubuntu package.
