@@ -13,4 +13,4 @@ dependencies = ["evdev"]
 keyflow = "keyflow.cli:main"
 
 [tool.setuptools]
-packages = ["keyflow"]
+packages = ["keyflow", "keyflow.gui"]

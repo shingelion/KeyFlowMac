@@ -1,0 +1,21 @@
+[Desktop Entry]
+Type=Application
+Name=KeyFlow
+GenericName=Text Expander
+Comment=Type a short trigger, get the full text
+Exec=keyflow gui
+Icon=keyflow
+Terminal=false
+Categories=Utility;TextTools;
+Keywords=text;expander;snippets;abbreviation;shortcuts;
+StartupNotify=true
+StartupWMClass=org.keyflow.KeyFlow
+Actions=quick-add;quick-add-selection;
+
+[Desktop Action quick-add]
+Name=Add Shortcut…
+Exec=keyflow gui --quick-add
+
+[Desktop Action quick-add-selection]
+Name=Add Shortcut from Selection
+Exec=keyflow gui --quick-add --from-selection

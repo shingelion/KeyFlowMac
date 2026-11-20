@@ -23,8 +23,8 @@ from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Callable, Optional
 
-from .core import Shortcut
-from .store import Store, _atomic_write
+from .core import Folder, Shortcut
+from .store import Library, Store, _atomic_write
 
 log = logging.getLogger("keyflow")
 
@@ -331,6 +331,42 @@ def _content(trigger: str, expansion: str, rich: bool, group: Optional[str], ena
     return (trigger, expansion, rich, _blank_to_none(group), enabled, _norm(folder_name))
 
 
+def reconcile_folders(state: SyncState, folders: list[Folder], edit_ms: int) -> None:
+    """Same idea as ``reconcile_local`` for the folder registry: a folder with a known ``syncId``
+    that was renamed/recoloured/reordered is an edit (not a new folder), a folder that vanished
+    becomes a tombstone, and a folder without an id adopts an unclaimed one of the same name."""
+    seen: set[str] = set()
+    pending: list[Folder] = []
+
+    def apply(f: Folder, entry: FolderEntry) -> None:
+        if (entry.name, entry.color_tag, entry.sort_order) != (f.name, f.color_tag, f.sort_order):
+            entry.name, entry.color_tag, entry.sort_order = f.name, f.color_tag, f.sort_order
+            entry.date_modified = max(edit_ms, entry.date_modified + 1)
+        f.sync_id = entry.sync_id
+        seen.add(entry.sync_id)
+
+    for f in folders:
+        if f.sync_id and f.sync_id not in seen and f.sync_id in state.folders:
+            apply(f, state.folders[f.sync_id])
+        else:
+            pending.append(f)
+    for f in pending:
+        match = next((e for e in state.folders.values()
+                      if e.sync_id not in seen and _norm(e.name) == _norm(f.name)), None)
+        if match is not None:
+            apply(f, match)
+            continue
+        fid = f.sync_id if f.sync_id and f.sync_id not in seen else new_sync_id()
+        state.tomb_folders.pop(fid, None)
+        state.folders[fid] = FolderEntry(fid, f.name, f.color_tag, f.sort_order, edit_ms, edit_ms, None)
+        f.sync_id = fid
+        seen.add(fid)
+    for fid in [k for k in state.folders if k not in seen]:
+        gone = state.folders.pop(fid)
+        deleted = max(edit_ms, gone.date_modified + 1)
+        state.tomb_folders[fid] = replace(gone, deleted_at=deleted, date_modified=deleted)
+
+
 def reconcile_local(state: SyncState, shortcuts: list[Shortcut], edit_ms: int) -> None:
     """Bring ``state`` in line with the shortcuts as they are on disk right now.
 
@@ -402,20 +438,22 @@ def reconcile_local(state: SyncState, shortcuts: list[Shortcut], edit_ms: int) -
     state.initialized = True
 
 
-def project(state: SyncState, current: list[Shortcut]) -> list[Shortcut]:
-    """The shortcuts that should be on disk after a merge, keeping the current order."""
-    order = {state.rekeyed.get(s.sync_id, s.sync_id): i for i, s in enumerate(current) if s.sync_id}
+def project(state: SyncState, current: Library) -> Library:
+    """What should be on disk after a merge, keeping the current order where possible."""
+    order = {state.rekeyed.get(s.sync_id, s.sync_id): i for i, s in enumerate(current.shortcuts) if s.sync_id}
 
     def key(sid: str) -> tuple:
         e = state.shortcuts[sid]
         return (0, order[sid], "") if sid in order else (1, 0, _norm(e.trigger))
 
-    out = []
+    shortcuts = []
     for sid in sorted(state.shortcuts, key=key):
         e = state.shortcuts[sid]
-        out.append(Shortcut(e.trigger, e.expansion, e.is_rich_text, e.group, e.enabled,
-                            state.folder_name(e.folder_sync_id), e.sync_id))
-    return out
+        shortcuts.append(Shortcut(e.trigger, e.expansion, e.is_rich_text, e.group, e.enabled,
+                                  state.folder_name(e.folder_sync_id), e.sync_id))
+    folders = [Folder(f.name, f.color_tag, f.sort_order, f.sync_id)
+               for f in sorted(state.folders.values(), key=lambda f: (f.sort_order, _norm(f.name)))]
+    return Library(shortcuts, folders)
 
 
 def build_file(state: SyncState) -> SyncFile:
@@ -546,8 +584,9 @@ class SyncEngine:
 
     def _sync_locked(self) -> SyncResult:
         store = self.store
-        shortcuts = store.load_shortcuts()  # ValueError on a corrupt file: report, never overwrite
-        original = [replace(s) for s in shortcuts]
+        library = store.load_library()  # ValueError on a corrupt file: report, never overwrite
+        shortcuts = library.shortcuts
+        original = Library([replace(s) for s in library.shortcuts], [replace(f) for f in library.folders])
         state = SyncState.load(store.sync_state_path)
         now = self._clock()
 
@@ -555,7 +594,9 @@ class SyncEngine:
             return self._record(state, now, SyncResult(False, f"sync folder {self.folder} does not exist"))
 
         state.prune(now)
-        reconcile_local(state, shortcuts, self._edit_ms(now))
+        edit_ms = self._edit_ms(now)
+        reconcile_folders(state, library.folders, edit_ms)
+        reconcile_local(state, shortcuts, edit_ms)
 
         # -- pull -----------------------------------------------------------------------
         note: Optional[str] = None
@@ -589,10 +630,10 @@ class SyncEngine:
             self._write_atomic(file.encode())
 
         # -- local projection ---------------------------------------------------------------
-        projected = project(state, shortcuts)
+        projected = project(state, library)
         changed_local = projected != original
         if changed_local:
-            store.save_shortcuts(projected)
+            store.save_library(projected)
 
         if waiting:
             result = SyncResult(True, f"{SYNC_FILE_NAME} is being written by another device, waiting",

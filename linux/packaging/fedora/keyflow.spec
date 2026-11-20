@@ -17,7 +17,11 @@ BuildRequires:  systemd-rpm-macros
 # Needed by %%check: libxkbcommon and the layout data it compiles keymaps from.
 BuildRequires:  libxkbcommon
 BuildRequires:  xkeyboard-config
+BuildRequires:  desktop-file-utils
 
+Requires:       python3-gobject
+Requires:       gtk4
+Requires:       hicolor-icon-theme
 Requires:       libxkbcommon
 Requires:       xkeyboard-config
 Recommends:     wl-clipboard
@@ -46,8 +50,14 @@ X11 and Wayland. It reads keystrokes from /dev/input and types the expansion thr
 install -Dpm 0644 packaging/keyflow.service %{buildroot}%{_userunitdir}/keyflow.service
 install -Dpm 0644 packaging/70-keyflow-uinput.rules %{buildroot}%{_udevrulesdir}/70-keyflow-uinput.rules
 install -Dpm 0644 packaging/keyflow-modules-load.conf %{buildroot}%{_modulesloaddir}/keyflow.conf
+install -Dpm 0644 packaging/org.keyflow.KeyFlow.desktop %{buildroot}%{_datadir}/applications/org.keyflow.KeyFlow.desktop
+for size in 16 32 128 256 512; do
+    install -Dpm 0644 packaging/icons/hicolor/${size}x${size}/apps/keyflow.png \
+        %{buildroot}%{_datadir}/icons/hicolor/${size}x${size}/apps/keyflow.png
+done
 
 %check
+desktop-file-validate %{buildroot}%{_datadir}/applications/org.keyflow.KeyFlow.desktop
 %{python3} -m unittest discover -s tests -t .
 
 %post
@@ -71,6 +81,8 @@ MSG
 %{_userunitdir}/keyflow.service
 %{_udevrulesdir}/70-keyflow-uinput.rules
 %{_modulesloaddir}/keyflow.conf
+%{_datadir}/applications/org.keyflow.KeyFlow.desktop
+%{_datadir}/icons/hicolor/*/apps/keyflow.png
 
 %changelog
 * Sat Nov 14 2026 KeyFlow Maintainers <noreply@example.com> - 1.0.0-1

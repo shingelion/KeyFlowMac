@@ -7,7 +7,7 @@ pkgdesc="System-wide text expander (Linux port of KeyFlowMac): type ;addr, get y
 arch=('any')
 url="https://github.com/shingelion/KeyFlowMac"
 license=('custom')  # the repository has no LICENSE file yet; update once it does
-depends=('python' 'python-evdev' 'libxkbcommon')
+depends=('python' 'python-evdev' 'python-gobject' 'gtk4' 'libxkbcommon' 'hicolor-icon-theme')
 makedepends=('python-build' 'python-installer' 'python-setuptools' 'python-wheel')
 optdepends=('wl-clipboard: paste characters that are not on your keyboard layout (Wayland)'
             'xclip: paste characters that are not on your keyboard layout (X11)'
@@ -32,5 +32,10 @@ package() {
   install -Dm644 packaging/keyflow.service "$pkgdir/usr/lib/systemd/user/keyflow.service"
   install -Dm644 packaging/70-keyflow-uinput.rules "$pkgdir/usr/lib/udev/rules.d/70-keyflow-uinput.rules"
   install -Dm644 packaging/keyflow-modules-load.conf "$pkgdir/usr/lib/modules-load.d/keyflow.conf"
+  install -Dm644 packaging/org.keyflow.KeyFlow.desktop "$pkgdir/usr/share/applications/org.keyflow.KeyFlow.desktop"
+  for size in 16 32 128 256 512; do
+    install -Dm644 "packaging/icons/hicolor/${size}x${size}/apps/keyflow.png" \
+      "$pkgdir/usr/share/icons/hicolor/${size}x${size}/apps/keyflow.png"
+  done
   install -Dm644 README.md "$pkgdir/usr/share/doc/$pkgname/README.md"
 }

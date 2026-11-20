@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any, Optional
 
 from . import importers
-from .core import EXPANSION_KEYS, AppSettings, Shortcut
+from .core import EXPANSION_KEYS, AppSettings, Folder, Shortcut
 
 # camelCase on disk, identical to the Swift Codable field names.
 _SETTINGS_FIELDS = {
@@ -62,6 +62,23 @@ LINUX_FIELDS = {
     "sync.enabled": ("sync_enabled", bool),
     "sync.folder": ("sync_folder", str),
 }
+
+
+@dataclass
+class Library:
+    """Everything in shortcuts.json: the shortcuts and the folder registry."""
+
+    shortcuts: list[Shortcut] = field(default_factory=list)
+    folders: list[Folder] = field(default_factory=list)
+
+    def ensure_folders(self) -> None:
+        """Every folder name a shortcut uses exists in the registry (case-insensitively)."""
+        known = {f.name.strip().lower() for f in self.folders}
+        for s in self.shortcuts:
+            name = (s.folder or "").strip()
+            if name and name.lower() not in known:
+                self.folders.append(Folder(name, None, len(self.folders)))
+                known.add(name.lower())
 
 
 def config_dir() -> Path:
@@ -125,19 +142,48 @@ class Store:
 
     # -- shortcuts --------------------------------------------------------------------------
 
-    def load_shortcuts(self) -> list[Shortcut]:
-        """Raises ValueError if the file exists but is not usable (so callers can keep old data)."""
+    def load_library(self) -> Library:
+        """Raises ValueError if the file exists but is not usable (so callers keep old data)."""
         try:
             text = self.shortcuts_path.read_text(encoding="utf-8")
         except FileNotFoundError:
-            return []
+            return Library()
         result = importers.parse_json(text)
         if not result.shortcuts and result.skipped and result.skipped[0].row_number == 0:
             raise ValueError(f"{self.shortcuts_path}: {result.skipped[0].reason}")
-        return [i.shortcut for i in result.shortcuts]
+        folders: list[Folder] = []
+        raw = json.loads(text)
+        for item in (raw.get("folders") if isinstance(raw, dict) else None) or []:
+            if isinstance(item, dict) and isinstance(item.get("name"), str) and item["name"].strip():
+                folders.append(Folder(
+                    item["name"].strip(),
+                    item["colorTag"] if isinstance(item.get("colorTag"), str) and item["colorTag"] else None,
+                    item["sortOrder"] if isinstance(item.get("sortOrder"), int) else len(folders),
+                    item["syncId"] if isinstance(item.get("syncId"), str) and item["syncId"] else None,
+                ))
+        lib = Library([i.shortcut for i in result.shortcuts], folders)
+        lib.ensure_folders()
+        return lib
+
+    def save_library(self, lib: Library) -> None:
+        lib.ensure_folders()
+        doc = json.loads(importers.to_json(lib.shortcuts, include_sync_id=True))
+        doc["folders"] = [
+            {"name": f.name, "colorTag": f.color_tag, "sortOrder": f.sort_order, "syncId": f.sync_id}
+            for f in lib.folders
+        ]
+        _atomic_write(self.shortcuts_path, json.dumps(doc, indent=2, sort_keys=True, ensure_ascii=False) + "\n")
+
+    def load_shortcuts(self) -> list[Shortcut]:
+        return self.load_library().shortcuts
 
     def save_shortcuts(self, shortcuts: list[Shortcut]) -> None:
-        _atomic_write(self.shortcuts_path, importers.to_json(shortcuts, include_sync_id=True))
+        """Replace the shortcuts, keeping the folder registry (colours, empty folders)."""
+        try:
+            folders = self.load_library().folders
+        except ValueError:
+            folders = []
+        self.save_library(Library(list(shortcuts), folders))
 
     def find(self, shortcuts: list[Shortcut], trigger: str) -> Optional[Shortcut]:
         wanted = trigger.lower()

@@ -14,7 +14,7 @@ the macOS-specific parts (CGEventTap, Accessibility, SwiftUI, SwiftData) replace
 | `keyboardSetUnicodeString` typing | virtual keyboard on `/dev/uinput`, typed with your own layout via `libxkbcommon` |
 | Accessibility permission | membership of the `input` group |
 | SwiftData + UserDefaults | `~/.config/keyflow/shortcuts.json` + `settings.json` |
-| SwiftUI app / menu bar | `keyflow` command + systemd user service |
+| SwiftUI app / menu bar | GTK 4 window (`keyflow gui`) + `keyflow` command + systemd user service |
 
 ## Install on Arch Linux (Fedora: see below)
 
@@ -35,7 +35,7 @@ systemctl --user enable --now keyflow
 keyflow doctor                                  # verifies all of the above
 ```
 
-Dependencies (all in the official repos): `python`, `python-evdev`, `libxkbcommon`. Optional:
+Dependencies (all in the official repos): `python`, `python-evdev`, `python-gobject`, `gtk4`, `libxkbcommon`. Optional:
 `wl-clipboard` / `xclip` (see *Characters that are not on your layout*), `xorg-setxkbmap`.
 
 To run from a checkout without installing: `python -m keyflow <command>` inside `linux/`.
@@ -44,7 +44,7 @@ To run from a checkout without installing: `python -m keyflow <command>` inside 
 
 ```bash
 sudo dnf install rpm-build python3-devel pyproject-rpm-macros systemd-rpm-macros \
-    libxkbcommon xkeyboard-config python3-evdev
+    desktop-file-utils libxkbcommon xkeyboard-config python3-evdev python3-gobject gtk4
 git clone https://github.com/shingelion/KeyFlowMac.git
 cd KeyFlowMac
 mkdir -p ~/rpmbuild/SOURCES
@@ -64,7 +64,7 @@ Tested by building, linting (`lintian`) and installing/removing the package on U
 yet tried on a real keyboard there. The package is architecture-independent.
 
 ```bash
-sudo apt install build-essential debhelper dh-python python3-evdev libxkbcommon0 xkb-data git
+sudo apt install build-essential debhelper dh-python desktop-file-utils python3-evdev python3-gi gir1.2-gtk-4.0 libxkbcommon0 xkb-data git
 git clone -b claude/sleepy-lamport-i2ud8e https://github.com/shingelion/KeyFlowMac.git
 cd KeyFlowMac/linux
 dpkg-buildpackage -us -uc -b          # runs the tests; writes ../keyflow_1.0.0_all.deb
@@ -139,6 +139,38 @@ Placeholders are the same as on macOS: `{date}`, `{date:yyyy-MM-dd}`, `{time}`, 
 Nothing is ever logged or transmitted: there is no networking code, and the log contains device
 names and counts only, never typed text.
 
+## The KeyFlow window (GUI)
+
+Open **KeyFlow** from your application menu, or run `keyflow gui`. It mirrors the macOS app:
+
+* **Shortcuts** tab: search, folder chips (with their colours), group chips, an on/off switch per
+  shortcut, click a row to edit it, right-click for Edit/Delete. Long-press a row, or use the
+  ✓ button, for multi-select: select several, then **move to a folder** or **delete**.
+* **+** adds a shortcut (trigger, expansion with `{date}`/`{time}`/`{cursor}`, group, folder,
+  enabled); the folder button manages folders: create, rename, recolour, delete (keep or delete
+  their shortcuts).
+* **Settings** tab: pause/resume, case sensitivity, preserve typed case, expand on
+  space-or-punctuation vs. immediately, required prefix, keyboard layout, **Syncthing sync**
+  (choose folder, Sync Now, last-synced time, errors), and import / export with the skipped-rows
+  viewer.
+* A banner tells you when KeyFlow can't work yet (not in the `input` group, `/dev/uinput`
+  unavailable, service not running) and offers a **Start service** button or the exact command.
+* Everything you change is saved immediately and applied by the running service within about
+  half a second; changes made by the CLI, by sync, or by another window show up in the window by
+  themselves.
+
+**Quick add from anywhere.** The launcher entry has right-click actions *Add Shortcut…* and *Add
+Shortcut from Selection* (the counterpart of the Mac's "Add as KeyFlow Shortcut" Services item).
+For a keyboard shortcut, bind `keyflow gui --quick-add --from-selection` in your desktop's
+settings (GNOME: Settings → Keyboard → Custom Shortcuts; KDE: System Settings → Shortcuts): select
+text in any app, press the key, type a trigger, Save.
+
+There is no tray / menu-bar icon: GNOME has none by default and tray support is inconsistent
+elsewhere. The window's main menu (☰) has the pause toggle, quick add and *Sync now*.
+
+The window needs GTK 4 and PyGObject (installed with the packages). Without them
+`keyflow gui` prints the install command for your distro; everything else keeps working.
+
 ## Sync with Syncthing (Mac, Android, other Linux machines)
 
 KeyFlow speaks the same sync protocol as the macOS and Android apps ([SYNC_PROTOCOL.md](../SYNC_PROTOCOL.md)):
@@ -174,9 +206,9 @@ What to expect:
 * **Edit times:** Linux keeps no per-shortcut timestamps, so an edit made while the daemon was
   off is dated with the modification time of `shortcuts.json`, not with the moment it later syncs.
   That keeps an offline edit from beating a newer edit made on another device.
-* **Folders** are a name on each shortcut (`--folder Work`) and sync to the other apps' folders by
-  name. Folder colours and ordering are passed through untouched but not shown. Folders are created
-  by using a name; a folder deleted on another device moves its shortcuts to Uncategorized here.
+* **Folders** sync too: creating, renaming, recolouring and deleting a folder (also an empty one)
+  on any device shows up on the others, and a shortcut's folder follows it. A folder deleted on
+  another device moves its shortcuts to Uncategorized here.
 * If the sync file looks half-written (Syncthing still transferring it) it is left alone and
   retried; KeyFlow never writes without first merging what is on disk.
 * Extra state lives in `~/.config/keyflow/sync-state.json` (what each shortcut looked like at the
@@ -220,8 +252,8 @@ Related limits compared to macOS:
 
 ## Not ported (yet)
 
-* The GUI (shortcut list, folder colours, menu bar, "Add as shortcut" Services entry). Folders are
-  kept as a plain name on each shortcut (`--folder`, and the `folder` column in JSON/CSV).
+* A tray / menu-bar icon (see the GUI section) and the macOS Services menu (approximated by the
+  quick-add-from-selection action).
 * Rich-text expansions (the flag round-trips through JSON but expansions are plain text, as on macOS).
 
 ## Development

@@ -90,34 +90,25 @@ def _modify(args: argparse.Namespace, store: Store, action: str) -> int:
 
 
 def cmd_import(args: argparse.Namespace, store: Store) -> int:
+    from .library import LibraryService
+
     path = Path(args.file)
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError) as e:
         return _err(f"cannot read {path}: {e}")
-    fmt = args.format or ("csv" if path.suffix.lower() == ".csv" else "json")
-    parsed = importers.parse_csv(text) if fmt == "csv" else importers.parse_json(text)
+    fmt = args.format or ("csv" if path.suffix.lower() == ".csv" else None)
+    outcome = LibraryService(store).import_text(text, overwrite_duplicates=args.overwrite, fmt=fmt)
+    skipped = outcome.skipped
 
-    shortcuts = store.load_shortcuts()
-    resolved = importers.resolve_import(
-        parsed, lambda t: store.find(shortcuts, t), overwrite_duplicates=args.overwrite
-    )
-    for s in resolved.to_save:
-        existing = store.find(shortcuts, s.trigger)
-        if existing:
-            shortcuts.remove(existing)
-        # An overwritten shortcut keeps its sync identity; imported ids are never trusted.
-        shortcuts.append(replace(s, sync_id=existing.sync_id if existing else None))
-    store.save_shortcuts(shortcuts)
-
-    print(f"Imported {len(resolved.to_save)} shortcut(s), skipped {len(resolved.skipped)}.")
-    if resolved.skipped:
-        for row in resolved.skipped[:20]:
+    print(f"Imported {outcome.imported} shortcut(s), skipped {len(skipped)}.")
+    if skipped:
+        for row in skipped[:20]:
             print(f"  row {row.row_number}: {row.reason} ({_one_line(row.trigger or row.raw_row, 40)})")
-        if len(resolved.skipped) > 20:
-            print(f"  … and {len(resolved.skipped) - 20} more")
+        if len(skipped) > 20:
+            print(f"  … and {len(skipped) - 20} more")
         if args.skipped_out:
-            Path(args.skipped_out).write_text(importers.skipped_to_csv(resolved.skipped), encoding="utf-8")
+            Path(args.skipped_out).write_text(importers.skipped_to_csv(skipped), encoding="utf-8")
             print(f"Skipped rows written to {args.skipped_out} (fix and re-import).")
     return 0
 
@@ -305,8 +296,8 @@ def cmd_try(args: argparse.Namespace, store: Store) -> int:
 # -- doctor ---------------------------------------------------------------------------------
 
 
-def _install_hint() -> str:
-    """Package-manager command for python-evdev, based on /etc/os-release."""
+def distro_ids() -> set[str]:
+    """``ID`` and ``ID_LIKE`` from /etc/os-release (e.g. {"ubuntu", "debian"})."""
     ids: set[str] = set()
     try:
         for line in Path("/etc/os-release").read_text().splitlines():
@@ -315,6 +306,12 @@ def _install_hint() -> str:
                 ids.update(value.strip().strip('"').split())
     except OSError:
         pass
+    return ids
+
+
+def _install_hint() -> str:
+    """Package-manager command for python-evdev, based on /etc/os-release."""
+    ids = distro_ids()
     if "arch" in ids:
         return "sudo pacman -S python-evdev"
     if "fedora" in ids or "rhel" in ids:
@@ -456,6 +453,11 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("try", help="dry run: show what typing TEXT would expand to")
     s.add_argument("text", help="typed text, e.g. ';addr ' (or '-' for stdin)")
 
+    s = sub.add_parser("gui", help="open the KeyFlow window")
+    s.add_argument("--quick-add", action="store_true", help="open the small add-shortcut window")
+    s.add_argument("--from-selection", action="store_true",
+                   help="with --quick-add: use the currently selected text as the expansion")
+
     sub.add_parser("doctor", help="check permissions, layout and dependencies")
     return p
 
@@ -466,6 +468,12 @@ def main(argv: Optional[list[str]] = None) -> int:
         from .daemon import main as daemon_main
 
         return daemon_main()
+
+    if args.command == "gui":
+        from .gui import run as gui_run
+
+        flags = [f for f, on in (("--quick-add", args.quick_add), ("--from-selection", args.from_selection)) if on]
+        return gui_run(flags)
 
     store = Store()
     try:
@@ -478,8 +486,7 @@ def main(argv: Optional[list[str]] = None) -> int:
             with store.lock():
                 return _modify(args, store, args.command)
         if args.command == "import":
-            with store.lock():
-                return cmd_import(args, store)
+            return cmd_import(args, store)
         if args.command == "sync":
             return cmd_sync(args, store)
         if args.command == "export":

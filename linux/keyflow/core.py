@@ -33,6 +33,23 @@ class Shortcut:
 
 
 @dataclass
+class Folder:
+    """A user-defined group of shortcuts. Shortcuts refer to it by ``name``; ``sync_id`` is its
+    cross-device identity (see sync.py)."""
+
+    name: str
+    color_tag: Optional[str] = None
+    sort_order: int = 0
+    sync_id: Optional[str] = None
+
+
+#: Distinct, pleasant colours for folder tags (shared with the macOS app).
+FOLDER_COLOR_PALETTE = [
+    "#E53935", "#FB8C00", "#FDD835", "#43A047", "#00ACC1", "#1E88E5", "#8E24AA", "#6D4C41",
+]
+
+
+@dataclass
 class AppSettings:
     service_enabled: bool = True
     case_sensitive: bool = False

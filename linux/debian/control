@@ -3,6 +3,7 @@ Section: utils
 Priority: optional
 Maintainer: KeyFlow Maintainers <noreply@example.com>
 Build-Depends: debhelper-compat (= 13),
+               desktop-file-utils,
                dh-python,
                python3,
                libxkbcommon0,
@@ -14,7 +15,7 @@ Homepage: https://github.com/shingelion/KeyFlowMac
 
 Package: keyflow
 Architecture: all
-Depends: ${python3:Depends}, ${misc:Depends}, python3-evdev, libxkbcommon0, xkb-data
+Depends: ${python3:Depends}, ${misc:Depends}, python3-evdev, python3-gi, gir1.2-gtk-4.0, libxkbcommon0, xkb-data
 Recommends: wl-clipboard, xclip
 Suggests: x11-xkb-utils
 Description: system-wide text expander (Linux port of KeyFlowMac)
