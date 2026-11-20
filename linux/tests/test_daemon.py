@@ -107,6 +107,20 @@ class DaemonTests(unittest.TestCase):
         d._read("kbd", FakeDevice([ev(a, 1), ev(a, 0)]))
         self.assertEqual(d._processor.buffer, ";aa")
 
+    def test_monitor_prints_every_key_code_without_crashing(self):
+        """Regression: aliased codes (several names) made the monitor crash on the first key."""
+        import contextlib, io
+
+        d, _ = self.make()
+        d.monitor = True
+        out = io.StringIO()
+        with contextlib.redirect_stdout(out):
+            for code in range(0, 0x2FF):
+                d._print_event(FakeDevice([], "kbd"), ev(code, 1), "")
+        self.assertEqual(len(out.getvalue().splitlines()), 0x2FF)
+        self.assertIn("KEY_A", out.getvalue())
+        self.assertEqual(Daemon._key_name(30), "KEY_A")
+
     def test_read_error_drops_the_device(self):
         d, _ = self.make()
 

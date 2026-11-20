@@ -1,7 +1,7 @@
 # Build from a tarball of the linux/ directory (see README, "Install on Fedora"):
 #   git archive --prefix=keyflow-%{version}/ -o ~/rpmbuild/SOURCES/keyflow-%{version}.tar.gz HEAD:linux
 Name:           keyflow
-Version:        1.1.0
+Version:        1.1.1
 Release:        1%{?dist}
 Summary:        System-wide text expander (Linux port of KeyFlowMac)
 
@@ -85,6 +85,9 @@ MSG
 %{_datadir}/icons/hicolor/*/apps/keyflow.png
 
 %changelog
+* Sat Nov 21 2026 KeyFlow Maintainers <noreply@example.com> - 1.1.1-1
+- Add keyflow monitor; ignore key events duplicated by remapper devices
+
 * Sat Nov 21 2026 KeyFlow Maintainers <noreply@example.com> - 1.1.0-1
 - Add GTK 4 GUI, desktop entry and icons; add Syncthing folder sync
 

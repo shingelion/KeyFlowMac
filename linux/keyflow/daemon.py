@@ -230,17 +230,24 @@ class Daemon:
         self._last_event[(code, value)] = (path, now)
         return previous is not None and previous[0] != path and now - previous[1] < DUPLICATE_WINDOW
 
-    def _print_event(self, dev: Any, ev: Any, note: str) -> None:
+    @staticmethod
+    def _key_name(code: int) -> str:
+        """Human name of a key/button code. evdev returns a str, or a list/tuple for aliased codes."""
         try:
             from evdev import ecodes
 
-            name = ecodes.KEY.get(ev.code) or ecodes.BTN.get(ev.code) or str(ev.code)
-            name = name[0] if isinstance(name, list) else name
-        except ImportError:
-            name = str(ev.code)
+            name = ecodes.KEY.get(code) or ecodes.BTN.get(code) or str(code)
+            if isinstance(name, (list, tuple)):
+                name = name[0] if name else str(code)
+            return str(name)
+        except Exception:  # a diagnostic must never take the daemon down
+            return str(code)
+
+    def _print_event(self, dev: Any, ev: Any, note: str) -> None:
         action = {0: "up", 1: "down", 2: "repeat"}.get(ev.value, str(ev.value))
         buf = self._processor.buffer if self._processor else ""
-        print(f"{dev.name[:36]:36} {name:<14} {action:<6} buffer={buf!r}{note}", flush=True)
+        name = str(getattr(dev, "name", "?"))[:36]
+        print(f"{name:36} {self._key_name(ev.code):<14} {action:<6} buffer={buf!r}{note}", flush=True)
 
     def _read(self, path: str, dev: Any) -> None:
         try:

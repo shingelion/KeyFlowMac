@@ -1,7 +1,7 @@
 # Builds KeyFlow from the checkout this file lives in (linux/packaging/arch/).
 #   cd linux/packaging/arch && makepkg -si
 pkgname=keyflow
-pkgver=1.1.0
+pkgver=1.1.1
 pkgrel=1
 pkgdesc="System-wide text expander (Linux port of KeyFlowMac): type ;addr, get your full address"
 arch=('any')

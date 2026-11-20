@@ -48,9 +48,9 @@ sudo dnf install rpm-build python3-devel pyproject-rpm-macros systemd-rpm-macros
 git clone https://github.com/shingelion/KeyFlowMac.git
 cd KeyFlowMac
 mkdir -p ~/rpmbuild/SOURCES
-git archive --prefix=keyflow-1.1.0/ -o ~/rpmbuild/SOURCES/keyflow-1.1.0.tar.gz HEAD:linux
+git archive --prefix=keyflow-1.1.1/ -o ~/rpmbuild/SOURCES/keyflow-1.1.1.tar.gz HEAD:linux
 rpmbuild -ba linux/packaging/fedora/keyflow.spec
-sudo dnf install ~/rpmbuild/RPMS/noarch/keyflow-1.1.0-1*.noarch.rpm
+sudo dnf install ~/rpmbuild/RPMS/noarch/keyflow-1.1.1-1*.noarch.rpm
 ```
 
 Then the same one-time setup as on Arch (`input` group, `modprobe uinput`, udev trigger,
@@ -67,8 +67,8 @@ yet tried on a real keyboard there. The package is architecture-independent.
 sudo apt install build-essential debhelper dh-python desktop-file-utils python3-evdev python3-gi gir1.2-gtk-4.0 libxkbcommon0 xkb-data git
 git clone -b claude/sleepy-lamport-i2ud8e https://github.com/shingelion/KeyFlowMac.git
 cd KeyFlowMac/linux
-dpkg-buildpackage -us -uc -b          # runs the tests; writes ../keyflow_1.1.0_all.deb
-sudo apt install ../keyflow_1.1.0_all.deb
+dpkg-buildpackage -us -uc -b          # runs the tests; writes ../keyflow_1.1.1_all.deb
+sudo apt install ../keyflow_1.1.1_all.deb
 ```
 
 Then, once:
