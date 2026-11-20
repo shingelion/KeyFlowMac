@@ -7,6 +7,8 @@ and the daemon notices the new modification time and reloads, so there is no IPC
 
 from __future__ import annotations
 
+import contextlib
+import fcntl
 import json
 import os
 import tempfile
@@ -40,6 +42,14 @@ class LinuxConfig:
     input_devices: list[str] = field(default_factory=list)
     #: Pause between synthetic key events, in milliseconds.
     inject_delay_ms: float = 2.0
+    #: Folder sync (Syncthing & co.): see sync.py.
+    sync_enabled: bool = False
+    sync_folder: str = ""
+
+    def keyboard_key(self) -> tuple:
+        """The fields that require rebuilding the keyboard layer when they change."""
+        return (self.xkb_layout, self.xkb_variant, self.xkb_model, self.xkb_options,
+                tuple(self.input_devices), self.inject_delay_ms)
 
 
 LINUX_FIELDS = {
@@ -49,6 +59,8 @@ LINUX_FIELDS = {
     "keyboard.options": ("xkb_options", str),
     "inputDevices": ("input_devices", list),
     "injectDelayMs": ("inject_delay_ms", float),
+    "sync.enabled": ("sync_enabled", bool),
+    "sync.folder": ("sync_folder", str),
 }
 
 
@@ -78,6 +90,26 @@ class Store:
         self.directory = directory or config_dir()
         self.shortcuts_path = self.directory / "shortcuts.json"
         self.settings_path = self.directory / "settings.json"
+        self.sync_state_path = self.directory / "sync-state.json"
+        self.lock_path = self.directory / ".lock"
+
+    @contextlib.contextmanager
+    def lock(self):
+        """Exclusive lock around read-modify-write of the config files (CLI, daemon, sync)."""
+        self.directory.mkdir(parents=True, exist_ok=True, mode=0o700)
+        with open(self.lock_path, "a") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                yield
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
+
+    def shortcuts_fingerprint(self) -> Optional[tuple]:
+        try:
+            st = self.shortcuts_path.stat()
+            return (st.st_mtime_ns, st.st_size)
+        except OSError:
+            return None
 
     # -- change detection -------------------------------------------------------------------
 
@@ -105,7 +137,7 @@ class Store:
         return [i.shortcut for i in result.shortcuts]
 
     def save_shortcuts(self, shortcuts: list[Shortcut]) -> None:
-        _atomic_write(self.shortcuts_path, importers.to_json(shortcuts))
+        _atomic_write(self.shortcuts_path, importers.to_json(shortcuts, include_sync_id=True))
 
     def find(self, shortcuts: list[Shortcut], trigger: str) -> Optional[Shortcut]:
         wanted = trigger.lower()
@@ -147,6 +179,11 @@ class Store:
         delay = data.get("injectDelayMs")
         if isinstance(delay, (int, float)) and not isinstance(delay, bool) and 0 <= delay <= 100:
             linux.inject_delay_ms = float(delay)
+        sync = data.get("sync") if isinstance(data.get("sync"), dict) else {}
+        if isinstance(sync.get("enabled"), bool):
+            linux.sync_enabled = sync["enabled"]
+        if isinstance(sync.get("folder"), str):
+            linux.sync_folder = sync["folder"]
         return settings, linux
 
     def save_settings(self, settings: AppSettings, linux: LinuxConfig) -> None:
@@ -159,6 +196,7 @@ class Store:
             "model": linux.xkb_model,
             "options": linux.xkb_options,
         }
+        data["sync"] = {"enabled": linux.sync_enabled, "folder": linux.sync_folder}
         data["inputDevices"] = linux.input_devices
         data["injectDelayMs"] = linux.inject_delay_ms
         _atomic_write(self.settings_path, json.dumps(data, indent=2, sort_keys=True) + "\n")

@@ -106,3 +106,19 @@ bug this rule exists to prevent.
   does), and **misses a file rewritten in place** (what Android's writer does).
 - A folder watcher is a fine extra for immediacy on top of polling, never a replacement.
 - Ignore events caused by your own write (compare against the bytes you just wrote).
+
+## Linux implementation notes
+
+The Linux port (`linux/keyflow/sync.py`) follows everything above. Where its situation differs:
+
+- `syncId` is treated as an opaque string everywhere, with no UUID mapping, so unusual spellings
+  (Android's 32-hex form, upper case) are written back verbatim without special handling.
+- The local store has no per-record timestamps. Local edits and deletions are found by comparing
+  `shortcuts.json` (which carries a `syncId` per shortcut) with a snapshot from the last sync, and
+  are dated with the file's modification time capped at "now", and always strictly newer than the
+  version they replace, so a device whose clock runs ahead cannot swallow them. The first sync,
+  when nothing is known, dates local records the same way.
+- A tombstone older than 30 days that this device does not hold is not re-adopted from the file,
+  so pruning actually removes it from the file at the next write.
+- The sync file is written to a `.syncthing.*.tmp` name in the same folder, fsynced and renamed into
+  place; Syncthing ignores that temp name, so only the finished file ever propagates.

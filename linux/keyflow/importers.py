@@ -103,7 +103,8 @@ def parse_json(text: str) -> ImportResult:
         is_rich = item.get("isRichText") if isinstance(item.get("isRichText"), bool) else False
         shortcuts.append(
             ImportedShortcut(
-                Shortcut(trigger, expansion, is_rich, group or None, enabled, folder or None),
+                Shortcut(trigger, expansion, is_rich, group or None, enabled, folder or None,
+                         _str(item.get("syncId")).strip(_WS) or None),
                 folder or None,
                 row_number,
                 raw_row,
@@ -116,9 +117,11 @@ def _str(value: object) -> str:
     return value if isinstance(value, str) else ""
 
 
-def to_json(shortcuts: list[Shortcut]) -> str:
-    array = [
-        {
+def to_json(shortcuts: list[Shortcut], include_sync_id: bool = False) -> str:
+    """``include_sync_id`` is for the local store only; exports stay in the shared schema."""
+    array = []
+    for s in shortcuts:
+        row = {
             "trigger": s.trigger,
             "expansion": s.expansion,
             "isRichText": s.is_rich_text,
@@ -126,8 +129,9 @@ def to_json(shortcuts: list[Shortcut]) -> str:
             "folder": s.folder,
             "enabled": s.enabled,
         }
-        for s in shortcuts
-    ]
+        if include_sync_id and s.sync_id:
+            row["syncId"] = s.sync_id
+        array.append(row)
     return json.dumps({"shortcuts": array}, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
 
 

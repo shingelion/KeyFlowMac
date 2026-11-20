@@ -11,3 +11,12 @@ linux/*.egg-info/
 linux/pkg/
 linux/src/
 *.pkg.tar.*
+linux/debian/keyflow/
+linux/debian/.debhelper/
+linux/debian/debhelper-build-stamp
+linux/debian/files
+linux/debian/*.debhelper
+linux/debian/*.substvars
+*.deb
+*.buildinfo
+*.changes

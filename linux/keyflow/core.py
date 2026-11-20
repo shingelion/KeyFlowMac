@@ -27,6 +27,9 @@ class Shortcut:
     #: Folder *name*, or None for "Uncategorized". (macOS stores a folder id; names are the
     #: portable representation used by the JSON/CSV exchange format.)
     folder: Optional[str] = None
+    #: Opaque cross-device identity used by sync (see sync.py). Never interpreted, only compared
+    #: and written back verbatim; None until the shortcut is first seen by a sync.
+    sync_id: Optional[str] = None
 
 
 @dataclass

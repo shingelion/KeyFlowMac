@@ -1,3 +1,0 @@
-./keyflow
-./packaging/keyflow.service
-./packaging/70-keyflow-uinput.rules

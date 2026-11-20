@@ -139,6 +139,51 @@ Placeholders are the same as on macOS: `{date}`, `{date:yyyy-MM-dd}`, `{time}`, 
 Nothing is ever logged or transmitted: there is no networking code, and the log contains device
 names and counts only, never typed text.
 
+## Sync with Syncthing (Mac, Android, other Linux machines)
+
+KeyFlow speaks the same sync protocol as the macOS and Android apps ([SYNC_PROTOCOL.md](../SYNC_PROTOCOL.md)):
+one file, `keyflow-sync.json`, in a folder that Syncthing mirrors between your devices. No server,
+no account.
+
+```bash
+# 1. In Syncthing, share one folder with your other devices - the SAME folder the Mac/Android
+#    apps use. (Install it with your package manager: pacman -S syncthing / dnf install syncthing /
+#    apt install syncthing.)
+# 2. Point KeyFlow at it:
+keyflow sync setup ~/Sync/KeyFlow
+```
+
+That runs a first sync and turns it on. From then on the running `keyflow daemon` syncs by itself:
+about 2 s after you change a shortcut, and within about 5 s of the file changing on disk. Other
+commands:
+
+```bash
+keyflow sync now       # force a pass
+keyflow sync status    # folder, last sync, last error, how many deletions are remembered
+keyflow sync off       # stop syncing (shortcuts and the sync file are left alone)
+```
+
+What to expect:
+
+* **Nothing is deleted by joining.** On first contact, shortcuts that exist on both sides with the
+  same trigger are recognised as the same shortcut and merged, not duplicated. Run
+  `keyflow export -o backup.json` first if you want a safety net.
+* **Newest edit wins, per shortcut.** Deleting a shortcut is synced as an explicit deletion, never
+  inferred from it being absent. Hand-editing `shortcuts.json` works too: edits and removals are
+  detected and synced.
+* **Edit times:** Linux keeps no per-shortcut timestamps, so an edit made while the daemon was
+  off is dated with the modification time of `shortcuts.json`, not with the moment it later syncs.
+  That keeps an offline edit from beating a newer edit made on another device.
+* **Folders** are a name on each shortcut (`--folder Work`) and sync to the other apps' folders by
+  name. Folder colours and ordering are passed through untouched but not shown. Folders are created
+  by using a name; a folder deleted on another device moves its shortcuts to Uncategorized here.
+* If the sync file looks half-written (Syncthing still transferring it) it is left alone and
+  retried; KeyFlow never writes without first merging what is on disk.
+* Extra state lives in `~/.config/keyflow/sync-state.json` (what each shortcut looked like at the
+  last sync, plus deletions kept for 30 days). It is safe to delete: it is rebuilt, you only lose
+  the memory of recent deletions. `shortcuts.json` now carries a `syncId` per shortcut; exports to
+  JSON/CSV do not include it.
+
 ## Characters that are not on your layout
 
 Expansions are typed with the keys of *your* layout, so `é`, `€` or `@` work on AZERTY, QWERTZ,
@@ -177,7 +222,6 @@ Related limits compared to macOS:
 
 * The GUI (shortcut list, folder colours, menu bar, "Add as shortcut" Services entry). Folders are
   kept as a plain name on each shortcut (`--folder`, and the `folder` column in JSON/CSV).
-* Sync (`SYNC_PROTOCOL.md`).
 * Rich-text expansions (the flag round-trips through JSON but expansions are plain text, as on macOS).
 
 ## Development

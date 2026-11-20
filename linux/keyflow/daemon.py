@@ -16,6 +16,7 @@ from .inject import Clipboard, Injector, UInputBackend, UInputUnavailable
 from .layout import detect_layout
 from .processor import Expansion, KeystrokeProcessor
 from .store import LinuxConfig, Store
+from .sync import SyncRunner
 from .xkb import XkbError, XkbKeymap
 
 log = logging.getLogger("keyflow")
@@ -64,6 +65,7 @@ class Daemon:
         self._injector: Optional[Injector] = None
         self._backend: Optional[UInputBackend] = None
         self._pending: Optional[tuple[Expansion, float]] = None
+        self._sync = SyncRunner(self.store)
 
     # -- setup ------------------------------------------------------------------------------
 
@@ -102,14 +104,16 @@ class Daemon:
             new_linux = self.linux
         if self._processor is not None:
             self._processor.settings = self.settings
-            if new_linux != self.linux:
-                self.linux = new_linux
+            keyboard_changed = new_linux.keyboard_key() != self.linux.keyboard_key()
+            self.linux = new_linux
+            if keyboard_changed:
                 try:
                     self._build_keyboard()
                 except XkbError as e:
                     log.error("keeping previous keyboard layout: %s", e)
         else:
             self.linux = new_linux
+        self._sync.configure(self.linux.sync_enabled, self.linux.sync_folder)
         self._fingerprint = fingerprint
 
     def _scan(self) -> None:
@@ -181,6 +185,10 @@ class Daemon:
 
                 now = time.monotonic()
                 self._flush_pending(now)
+                try:
+                    self._sync.tick()
+                except Exception:  # sync must never take the expander down
+                    log.exception("sync failed unexpectedly")
 
                 if self._reload_requested or self.store.fingerprint() != self._fingerprint:
                     self._reload_requested = False

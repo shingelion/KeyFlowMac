@@ -66,7 +66,8 @@ def cmd_add(args: argparse.Namespace, store: Store) -> int:
     existing = store.find(shortcuts, trigger)
     if existing and not args.force:
         return _err(f"'{existing.trigger}' already exists (use --force to overwrite)")
-    new = Shortcut(trigger, expansion, False, args.group, not args.disabled, args.folder)
+    new = Shortcut(trigger, expansion, False, args.group, not args.disabled, args.folder,
+                   existing.sync_id if existing else None)
     shortcuts = [s for s in shortcuts if s is not existing] + [new]
     store.save_shortcuts(shortcuts)
     print(f"{'Updated' if existing else 'Added'} {trigger}")
@@ -105,7 +106,8 @@ def cmd_import(args: argparse.Namespace, store: Store) -> int:
         existing = store.find(shortcuts, s.trigger)
         if existing:
             shortcuts.remove(existing)
-        shortcuts.append(s)
+        # An overwritten shortcut keeps its sync identity; imported ids are never trusted.
+        shortcuts.append(replace(s, sync_id=existing.sync_id if existing else None))
     store.save_shortcuts(shortcuts)
 
     print(f"Imported {len(resolved.to_save)} shortcut(s), skipped {len(resolved.skipped)}.")
@@ -176,6 +178,8 @@ def cmd_settings(args: argparse.Namespace, store: Store) -> int:
             attr, typ = LINUX_FIELDS[key]
             if typ is list:
                 value = [v for v in args.value.split(",") if v]
+            elif typ is bool:
+                value = _parse_bool(args.value)
             elif typ is float:
                 value = float(args.value)
                 if not 0 <= value <= 100:
@@ -197,6 +201,75 @@ def cmd_pause_resume(args: argparse.Namespace, store: Store, enabled: bool) -> i
     settings.service_enabled = enabled
     store.save_settings(settings, linux)
     print("Expansion resumed." if enabled else "Expansion paused (the daemon keeps running).")
+    return 0
+
+
+# -- sync -----------------------------------------------------------------------------------
+
+
+def _fmt_ms(ms: Optional[int]) -> str:
+    if not ms:
+        return "never"
+    import datetime as dt
+
+    return dt.datetime.fromtimestamp(ms / 1000).strftime("%Y-%m-%d %H:%M:%S")
+
+
+def _run_sync(store: Store, folder: str) -> int:
+    from .sync import SyncEngine
+
+    result = SyncEngine(store, folder).sync_once()
+    if not result.ok:
+        return _err(f"sync failed: {result.message}")
+    details = []
+    if result.changed_local:
+        details.append("local shortcuts updated")
+    if result.wrote_remote:
+        details.append("sync file updated")
+    print(f"Sync: {result.message}" + (f" ({', '.join(details)})" if details else ""))
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace, store: Store) -> int:
+    from .sync import SYNC_FILE_NAME, SyncState
+
+    settings, linux = store.load_settings()
+
+    if args.sync_command == "setup":
+        folder = Path(args.folder).expanduser().resolve()
+        if not folder.is_dir():
+            if not args.create:
+                return _err(f"{folder} is not a directory (use --create to make it)")
+            folder.mkdir(parents=True, exist_ok=True)
+        linux.sync_folder, linux.sync_enabled = str(folder), True
+        store.save_settings(settings, linux)
+        print(f"Syncing through {folder / SYNC_FILE_NAME}")
+        print("Use the same Syncthing folder as on your Mac / Android device.")
+        return _run_sync(store, str(folder))
+
+    if args.sync_command == "off":
+        linux.sync_enabled = False
+        store.save_settings(settings, linux)
+        print("Sync turned off. Your shortcuts stay as they are; the sync file is not touched.")
+        return 0
+
+    if args.sync_command == "now":
+        if not linux.sync_folder:
+            return _err("sync is not set up; run: keyflow sync setup FOLDER")
+        return _run_sync(store, linux.sync_folder)
+
+    # status
+    state = SyncState.load(store.sync_state_path)
+    print(f"enabled:     {'yes' if linux.sync_enabled else 'no'}")
+    print(f"folder:      {linux.sync_folder or '(not set)'}")
+    if linux.sync_folder:
+        f = Path(linux.sync_folder).expanduser() / SYNC_FILE_NAME
+        print(f"sync file:   {f} ({'present' if f.exists() else 'not created yet'})")
+    print(f"last sync:   {_fmt_ms(state.last_synced_ms)}")
+    print(f"last error:  {state.last_error or 'none'}")
+    print(f"tracking:    {len(state.shortcuts)} shortcut(s), {len(state.tomb_shortcuts)} deletion(s) remembered")
+    if linux.sync_enabled:
+        print("The running 'keyflow daemon' syncs automatically; 'keyflow sync now' forces a pass.")
     return 0
 
 
@@ -315,6 +388,11 @@ def cmd_doctor(args: argparse.Namespace, store: Store) -> int:
     except ValueError as e:
         report(False, "shortcuts", str(e))
     report(None, "service", "enabled" if settings.service_enabled else "PAUSED (keyflow resume)")
+    if linux.sync_enabled:
+        folder_ok = Path(linux.sync_folder).expanduser().is_dir()
+        report(folder_ok, "sync folder", linux.sync_folder + ("" if folder_ok else " (missing)"))
+    else:
+        report(None, "sync", "off (keyflow sync setup FOLDER)")
 
     from .inject import Clipboard
     cb = Clipboard()
@@ -363,6 +441,15 @@ def build_parser() -> argparse.ArgumentParser:
     s.add_argument("key", nargs="?")
     s.add_argument("value", nargs="?")
 
+    s = sub.add_parser("sync", help="sync shortcuts with other devices through a Syncthing folder")
+    ssub = s.add_subparsers(dest="sync_command", required=True)
+    t = ssub.add_parser("setup", help="choose the synced folder and turn sync on")
+    t.add_argument("folder", help="the Syncthing folder shared with your other devices")
+    t.add_argument("--create", action="store_true", help="create the folder if it does not exist")
+    ssub.add_parser("now", help="sync once, right now")
+    ssub.add_parser("status", help="show sync state")
+    ssub.add_parser("off", help="turn sync off")
+
     sub.add_parser("pause", help="stop expanding without stopping the service")
     sub.add_parser("resume", help="resume expanding")
 
@@ -385,11 +472,16 @@ def main(argv: Optional[list[str]] = None) -> int:
         if args.command == "list":
             return cmd_list(args, store)
         if args.command == "add":
-            return cmd_add(args, store)
+            with store.lock():
+                return cmd_add(args, store)
         if args.command in ("remove", "enable", "disable"):
-            return _modify(args, store, args.command)
+            with store.lock():
+                return _modify(args, store, args.command)
         if args.command == "import":
-            return cmd_import(args, store)
+            with store.lock():
+                return cmd_import(args, store)
+        if args.command == "sync":
+            return cmd_sync(args, store)
         if args.command == "export":
             return cmd_export(args, store)
         if args.command == "settings":
