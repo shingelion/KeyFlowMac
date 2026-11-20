@@ -1,0 +1,17 @@
+#!/bin/sh
+set -e
+
+if [ "$1" = "configure" ]; then
+    udevadm control --reload 2>/dev/null || true
+    udevadm trigger /dev/uinput 2>/dev/null || true
+    modprobe uinput 2>/dev/null || true
+    cat <<'MSG'
+KeyFlow needs, once:
+  sudo usermod -aG input $USER          (then log out and back in)
+then, as your normal user:
+  enable the user service (see 'Install on Debian/Ubuntu' in the README)
+  then run: keyflow doctor
+MSG
+fi
+
+#DEBHELPER#

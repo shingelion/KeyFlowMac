@@ -1,0 +1,20 @@
+#!/usr/bin/make -f
+%:
+	dh $@ --with python3
+
+# No build step: pure Python, installed by debian/keyflow.install.
+override_dh_auto_build:
+
+override_dh_auto_install:
+	install -Dm755 debian/keyflow.wrapper debian/keyflow/usr/bin/keyflow
+	install -Dm644 packaging/keyflow-modules-load.conf debian/keyflow/usr/lib/modules-load.d/keyflow.conf
+
+# A keystroke reader must be opt-in: do not enable the user service for every user.
+override_dh_installsystemduser:
+	# intentionally empty: ship the unit but add no enable/start maintainer-script code
+
+override_dh_auto_test:
+	python3 -m unittest discover -s tests -t .
+
+override_dh_auto_clean:
+	find . -name __pycache__ -type d -prune -exec rm -rf {} +

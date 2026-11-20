@@ -1,0 +1,3 @@
+keyflow usr/lib/python3/dist-packages/
+packaging/keyflow.service usr/lib/systemd/user/
+packaging/70-keyflow-uinput.rules usr/lib/udev/rules.d/

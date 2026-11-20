@@ -1,0 +1,18 @@
+Package: keyflow
+Version: 1.0.0
+Architecture: all
+Maintainer: KeyFlow Maintainers <noreply@example.com>
+Installed-Size: 113
+Depends: python3:any, python3-evdev, libxkbcommon0, xkb-data
+Recommends: wl-clipboard, xclip
+Suggests: x11-xkb-utils
+Section: utils
+Priority: optional
+Homepage: https://github.com/shingelion/KeyFlowMac
+Description: system-wide text expander (Linux port of KeyFlowMac)
+ Replaces short triggers such as ";addr" with full snippets in any
+ application, on X11 and Wayland. Keystrokes are read from /dev/input and the
+ expansion is typed through /dev/uinput using the user's own keyboard layout.
+ .
+ Reading keyboards requires membership of the "input" group; see
+ /usr/share/doc/keyflow/README.md.

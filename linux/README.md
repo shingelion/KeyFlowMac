@@ -58,6 +58,31 @@ Then the same one-time setup as on Arch (`input` group, `modprobe uinput`, udev 
 installed as weak dependencies for the clipboard fallback. Fedora's default GNOME/Wayland session
 is supported; the layout is read from GNOME settings.
 
+## Install on Debian / Ubuntu
+
+Tested by building, linting (`lintian`) and installing/removing the package on Ubuntu 24.04; not
+yet tried on a real keyboard there. The package is architecture-independent.
+
+```bash
+sudo apt install build-essential debhelper dh-python python3-evdev libxkbcommon0 xkb-data git
+git clone -b claude/sleepy-lamport-i2ud8e https://github.com/shingelion/KeyFlowMac.git
+cd KeyFlowMac/linux
+dpkg-buildpackage -us -uc -b          # runs the tests; writes ../keyflow_1.0.0_all.deb
+sudo apt install ../keyflow_1.0.0_all.deb
+```
+
+Then, once:
+
+```bash
+sudo usermod -aG input $USER          # then log out and back in
+systemctl --user enable --now keyflow # the package does not enable the service for you
+keyflow doctor
+```
+
+The package loads `uinput`, installs the udev rule and the systemd user unit. The service is
+deliberately **not** enabled automatically: reading keystrokes should be an explicit opt-in per
+user. Remove with `sudo apt remove keyflow` (your shortcuts in `~/.config/keyflow` are kept).
+
 ## Usage
 
 ```bash

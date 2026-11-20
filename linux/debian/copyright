@@ -1,0 +1,9 @@
+Format: https://www.debian.org/doc/packaging-manuals/copyright-format/1.0/
+Upstream-Name: keyflow
+Source: https://github.com/shingelion/KeyFlowMac
+
+Files: *
+Copyright: 2026 KeyFlow authors
+License: UNSPECIFIED
+ The upstream repository does not yet contain a license file. Add one and
+ update this file before redistributing the package.
