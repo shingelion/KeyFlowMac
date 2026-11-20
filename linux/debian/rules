@@ -14,7 +14,7 @@ override_dh_installsystemduser:
 	# intentionally empty: ship the unit but add no enable/start maintainer-script code
 
 override_dh_auto_test:
-	python3 -m unittest discover -s tests -t .
+	KEYFLOW_NO_GUI_TESTS=1 python3 -m unittest discover -s tests -t .
 
 override_dh_auto_clean:
 	find . -name __pycache__ -type d -prune -exec rm -rf {} +

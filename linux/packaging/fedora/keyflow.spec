@@ -58,7 +58,7 @@ done
 
 %check
 desktop-file-validate %{buildroot}%{_datadir}/applications/org.keyflow.KeyFlow.desktop
-%{python3} -m unittest discover -s tests -t .
+KEYFLOW_NO_GUI_TESTS=1 %{python3} -m unittest discover -s tests -t .
 
 %post
 %udev_rules_update

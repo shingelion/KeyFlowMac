@@ -22,7 +22,7 @@ build() {
 
 check() {
   cd "$startdir/../.."
-  python -m unittest discover -s tests -t .
+  KEYFLOW_NO_GUI_TESTS=1 python -m unittest discover -s tests -t .
 }
 
 package() {

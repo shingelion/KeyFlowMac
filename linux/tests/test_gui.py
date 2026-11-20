@@ -14,6 +14,8 @@ from keyflow.library import ALL, UNCATEGORIZED, filter_shortcuts
 from keyflow.store import Library, Store
 
 try:
+    if os.environ.get("KEYFLOW_NO_GUI_TESTS"):      # package builds: never open windows
+        raise ImportError("GUI tests disabled")
     import gi
 
     gi.require_version("Gtk", "4.0")
