@@ -453,6 +453,8 @@ def build_parser() -> argparse.ArgumentParser:
     s = sub.add_parser("try", help="dry run: show what typing TEXT would expand to")
     s.add_argument("text", help="typed text, e.g. ';addr ' (or '-' for stdin)")
 
+    sub.add_parser("monitor", help="diagnose: print every key KeyFlow sees (stop the service first)")
+
     s = sub.add_parser("gui", help="open the KeyFlow window")
     s.add_argument("--quick-add", action="store_true", help="open the small add-shortcut window")
     s.add_argument("--from-selection", action="store_true",
@@ -468,6 +470,11 @@ def main(argv: Optional[list[str]] = None) -> int:
         from .daemon import main as daemon_main
 
         return daemon_main()
+
+    if args.command == "monitor":
+        from .daemon import monitor_main
+
+        return monitor_main()
 
     if args.command == "gui":
         from .gui import run as gui_run

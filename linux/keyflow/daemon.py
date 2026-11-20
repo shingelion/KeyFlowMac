@@ -25,6 +25,11 @@ log = logging.getLogger("keyflow")
 #: does not turn into a restart loop.
 EXIT_CONFIG = 78
 
+#: The same physical key press can arrive from two devices when a remapper (input-remapper, keyd,
+#: kmonad, ...) re-emits it through a virtual keyboard. Identical events from *different* devices
+#: this close together are one key press.
+DUPLICATE_WINDOW = 0.008
+
 SCAN_INTERVAL = 3.0
 POLL_INTERVAL = 0.5
 #: How long to wait for held keys to be released before expanding anyway.
@@ -50,7 +55,12 @@ class NoKeyboardAccess(Exception):
 
 
 class Daemon:
-    def __init__(self, store: Optional[Store] = None) -> None:
+    def __init__(self, store: Optional[Store] = None, monitor: bool = False) -> None:
+        #: Print every key event to the terminal (``keyflow monitor``). Never used by the service.
+        self.monitor = monitor
+        self._last_event: dict[tuple[int, int], tuple[str, float]] = {}
+        self.event_counts: dict[str, int] = {}
+        self.dropped_duplicates = 0
         self.store = store or Store()
         self.engine = ExpansionEngine()
         self.settings = AppSettings()
@@ -215,11 +225,35 @@ class Daemon:
             self._injector.perform(expansion)
             self._processor.clear()
 
+    def _is_duplicate(self, path: str, code: int, value: int, now: float) -> bool:
+        previous = self._last_event.get((code, value))
+        self._last_event[(code, value)] = (path, now)
+        return previous is not None and previous[0] != path and now - previous[1] < DUPLICATE_WINDOW
+
+    def _print_event(self, dev: Any, ev: Any, note: str) -> None:
+        try:
+            from evdev import ecodes
+
+            name = ecodes.KEY.get(ev.code) or ecodes.BTN.get(ev.code) or str(ev.code)
+            name = name[0] if isinstance(name, list) else name
+        except ImportError:
+            name = str(ev.code)
+        action = {0: "up", 1: "down", 2: "repeat"}.get(ev.value, str(ev.value))
+        buf = self._processor.buffer if self._processor else ""
+        print(f"{dev.name[:36]:36} {name:<14} {action:<6} buffer={buf!r}{note}", flush=True)
+
     def _read(self, path: str, dev: Any) -> None:
         try:
             for ev in dev.read():
                 if ev.type != 1:  # EV_KEY
                     continue
+                self.event_counts[dev.name] = self.event_counts.get(dev.name, 0) + 1
+                if self._is_duplicate(path, ev.code, ev.value, time.monotonic()):
+                    self.dropped_duplicates += 1
+                    if self.monitor:
+                        self._print_event(dev, ev, "   (duplicate from another device: ignored)")
+                    continue
+                note = ""
                 if ev.code in keys.POINTER_BUTTONS:
                     if ev.value == 1:
                         self._processor.on_pointer()
@@ -228,6 +262,9 @@ class Daemon:
                     if expansion is not None and self._pending is None:
                         log.debug("expanding (%d char(s) typed)", expansion.delete_count)
                         self._pending = (expansion, time.monotonic() + RELEASE_WAIT)
+                        note = f"   -> MATCH: will erase {expansion.delete_count} char(s) and type {expansion.text!r}"
+                if self.monitor:
+                    self._print_event(dev, ev, note)
         except BlockingIOError:
             pass
         except OSError:
@@ -242,6 +279,30 @@ class Daemon:
         if self._backend is not None:
             self._backend.close()
         log.info("stopped")
+
+
+def monitor_main() -> int:
+    """``keyflow monitor``: the daemon, loudly. For diagnosing why expansion does not fire."""
+    from . import status
+
+    if status.service_is_active():
+        print("The KeyFlow service is running; stop it first so expansions don't happen twice:\n"
+              "  systemctl --user stop keyflow\n(start it again afterwards with: systemctl --user start keyflow)",
+              file=sys.stderr)
+        return 2
+    print("Monitoring. Type in any window; every key KeyFlow sees is printed here (including what you type!).\n"
+          "Expansions are really performed. Press Ctrl+C to stop.\n", flush=True)
+    logging.basicConfig(level=logging.INFO, format="%(levelname)s %(message)s", stream=sys.stderr)
+    daemon = Daemon(monitor=True)
+    code = daemon.run()
+    print("\nKey events seen per device:")
+    for name, n in sorted(daemon.event_counts.items(), key=lambda kv: -kv[1]):
+        print(f"  {n:6d}  {name}")
+    if not daemon.event_counts:
+        print("  (none: KeyFlow received no key events from any device)")
+    if daemon.dropped_duplicates:
+        print(f"Ignored {daemon.dropped_duplicates} duplicate event(s) re-emitted by another device.")
+    return code
 
 
 def main() -> int:

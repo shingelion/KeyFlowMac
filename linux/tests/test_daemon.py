@@ -2,6 +2,7 @@ import tempfile
 import types
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from keyflow import keys
 from keyflow.core import ExpansionEngine, Shortcut
@@ -13,8 +14,9 @@ from keyflow.xkb import KeymapNames, XkbKeymap
 
 
 class FakeDevice:
-    def __init__(self, events):
+    def __init__(self, events, name="fake keyboard"):
         self.events = events
+        self.name = name
 
     def read(self):
         events, self.events = self.events, []
@@ -85,6 +87,25 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(d._processor.buffer, ";a")
         d._read("mouse", FakeDevice([ev(keys.BTN_LEFT, 1)]))
         self.assertEqual(d._processor.buffer, "")
+
+    def test_same_key_from_two_devices_is_one_key_press(self):
+        """A remapper re-emitting a key through a virtual device must not type it twice."""
+        d, km = self.make()
+        d._keyboards["kbd2"] = None
+        rev = km.reverse_map()
+        semi, a = rev[";"].code, rev["a"].code
+        t = [100.0]
+        with mock.patch("keyflow.daemon.time.monotonic", lambda: t[0]):
+            for code in (semi, a):
+                d._read("kbd", FakeDevice([ev(code, 1), ev(code, 0)]))
+                t[0] += 0.0004
+                d._read("kbd2", FakeDevice([ev(code, 1), ev(code, 0)]))   # the forwarded copy
+                t[0] += 0.05
+        self.assertEqual(d._processor.buffer, ";a")
+        self.assertEqual(d.dropped_duplicates, 4)
+        # ...but the same key pressed again later, or on one device only, is real
+        d._read("kbd", FakeDevice([ev(a, 1), ev(a, 0)]))
+        self.assertEqual(d._processor.buffer, ";aa")
 
     def test_read_error_drops_the_device(self):
         d, _ = self.make()
