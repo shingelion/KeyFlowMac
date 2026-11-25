@@ -1,5 +1,5 @@
-# Build from a tarball of the linux/ directory (see README, "Install on Fedora"):
-#   git archive --prefix=keyflow-%{version}/ -o ~/rpmbuild/SOURCES/keyflow-%{version}.tar.gz HEAD:linux
+# Normally built for you by install-fedora.sh (see INSTALL-FEDORA.md). By hand: put a tarball of
+# the linux/ directory named keyflow-<version>.tar.gz (top folder keyflow-<version>/) in SOURCES.
 Name:           keyflow
 Version:        1.1.1
 Release:        1%{?dist}
@@ -61,22 +61,14 @@ desktop-file-validate %{buildroot}%{_datadir}/applications/org.keyflow.KeyFlow.d
 KEYFLOW_NO_GUI_TESTS=1 %{python3} -m unittest discover -s tests -t .
 
 %post
-%udev_rules_update
-cat <<'MSG'
-KeyFlow needs, once:
-  sudo usermod -aG input $USER          (then log out and back in)
-  sudo modprobe uinput
-  sudo udevadm trigger /dev/uinput
-then:
-  systemctl --user enable --now keyflow
-  keyflow doctor
-MSG
+/usr/bin/udevadm control --reload >/dev/null 2>&1 || :
+echo "KeyFlow: finish setup (input group, then log in again) as described in %{_docdir}/%{name}/INSTALL-FEDORA.md"
 
 %postun
-%udev_rules_update
+/usr/bin/udevadm control --reload >/dev/null 2>&1 || :
 
 %files -f %{pyproject_files}
-%doc README.md
+%doc README.md INSTALL-FEDORA.md
 %{_bindir}/keyflow
 %{_userunitdir}/keyflow.service
 %{_udevrulesdir}/70-keyflow-uinput.rules

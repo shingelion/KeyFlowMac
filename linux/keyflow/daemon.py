@@ -228,7 +228,7 @@ class Daemon:
     def _is_duplicate(self, path: str, code: int, value: int, now: float) -> bool:
         previous = self._last_event.get((code, value))
         self._last_event[(code, value)] = (path, now)
-        return previous is not None and previous[0] != path and now - previous[1] < DUPLICATE_WINDOW
+        return previous is not None and previous[0] != path and 0 <= now - previous[1] < DUPLICATE_WINDOW
 
     @staticmethod
     def _key_name(code: int) -> str:

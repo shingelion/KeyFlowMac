@@ -104,7 +104,8 @@ class DaemonTests(unittest.TestCase):
         self.assertEqual(d._processor.buffer, ";a")
         self.assertEqual(d.dropped_duplicates, 4)
         # ...but the same key pressed again later, or on one device only, is real
-        d._read("kbd", FakeDevice([ev(a, 1), ev(a, 0)]))
+        with mock.patch("keyflow.daemon.time.monotonic", lambda: t[0]):
+            d._read("kbd", FakeDevice([ev(a, 1), ev(a, 0)]))
         self.assertEqual(d._processor.buffer, ";aa")
 
     def test_monitor_prints_every_key_code_without_crashing(self):
